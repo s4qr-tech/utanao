@@ -1,0 +1,1058 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ウタナオ</title>
+<!--
+  ウタナオ（ボイス補正アプリ）Phase 1 / ステップ1：骨組み
+  - 4画面（ホーム／録音／補正／書き出し）の遷移とUIのみ
+  - 音声処理はダミー（実処理はステップ2以降）
+  - 編集の入口：①デザイントークン（:root）②コンポーネント ③画面別
+-->
+<style>
+/* =========================================================
+   1. デザイントークン（soh-ds 仮置き：MIDORI × KIN）
+   ※ soh-ds 正式トークンが届いたらここだけ差し替える
+   ========================================================= */
+:root {
+  /* 色 */
+  --color-ground:      #24563A; /* MIDORI：主色・背景アクセント */
+  --color-ground-deep: #1A4029;
+  --color-kinari:      #EFECE4; /* KINARI：面 */
+  --color-kin:         #B8955A; /* KIN：強調 */
+  --color-kin-soft:    #E4D6BC;
+  --color-surface:     #F7F5F0;
+  --color-text:        #1F2A22;
+  --color-text-sub:    #5E6B62;
+  --color-line:        #D8D2C4;
+  --color-on-ground:   #EFECE4;
+
+  /* 文字 */
+  --font-base: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --fs-xs: 12px; --fs-sm: 14px; --fs-md: 16px; --fs-lg: 20px; --fs-xl: 28px;
+  --fw-regular: 400; --fw-bold: 700;
+
+  /* 余白・形 */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px;
+  --radius-sm: 8px; --radius-md: 14px; --radius-lg: 24px; --radius-pill: 999px;
+  --shadow-card: 0 2px 10px rgba(36, 86, 58, .08);
+  --tap-min: 56px; /* 押しやすさの最小高さ */
+  --duration: .2s;
+}
+
+/* =========================================================
+   2. ベース
+   ========================================================= */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--font-base);
+  font-size: var(--fs-md);
+  color: var(--color-text);
+  background: var(--color-surface);
+  -webkit-tap-highlight-color: transparent;
+}
+.app { max-width: 480px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
+
+/* =========================================================
+   3. コンポーネント
+   ========================================================= */
+/* ヘッダー */
+.header { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4); }
+.header__back { width: 40px; height: 40px; border: none; background: none; font-size: var(--fs-lg); color: var(--color-ground); cursor: pointer; border-radius: var(--radius-pill); }
+.header__title { font-size: var(--fs-md); font-weight: var(--fw-bold); }
+
+/* ボタン */
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: var(--space-2);
+  width: 100%; min-height: var(--tap-min); padding: 0 var(--space-5);
+  border: none; border-radius: var(--radius-pill);
+  font: inherit; font-weight: var(--fw-bold); cursor: pointer;
+  transition: transform var(--duration), opacity var(--duration);
+}
+.btn:active { transform: scale(.98); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn--primary { background: var(--color-ground); color: var(--color-on-ground); }
+.btn--accent  { background: var(--color-kin); color: #fff; }
+.btn--ghost   { background: var(--color-kinari); color: var(--color-ground); }
+.btn--big     { min-height: 96px; border-radius: var(--radius-lg); font-size: var(--fs-lg); }
+
+/* カード */
+.card { background: #fff; border-radius: var(--radius-md); box-shadow: var(--shadow-card); padding: var(--space-4); }
+.card__label { font-size: var(--fs-xs); color: var(--color-text-sub); margin-bottom: var(--space-2); }
+
+/* お知らせ */
+.notice { background: var(--color-kin-soft); color: var(--color-text); border-radius: var(--radius-sm); padding: var(--space-3); font-size: var(--fs-sm); }
+
+/* 切替（セグメント） */
+.segment { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-2); }
+.segment__item {
+  min-height: 48px; border: 1px solid var(--color-line); background: #fff; border-radius: var(--radius-sm);
+  font: inherit; font-size: var(--fs-sm); color: var(--color-text); cursor: pointer;
+}
+.segment__item[aria-pressed="true"] { background: var(--color-ground); color: var(--color-on-ground); border-color: var(--color-ground); }
+
+/* A/B 切替 */
+.ab { display: grid; grid-template-columns: 1fr 1fr; background: var(--color-kinari); border-radius: var(--radius-pill); padding: var(--space-1); }
+.ab__item { min-height: 44px; border: none; background: none; border-radius: var(--radius-pill); font: inherit; font-weight: var(--fw-bold); color: var(--color-text-sub); cursor: pointer; }
+.ab__item[aria-pressed="true"] { background: #fff; color: var(--color-ground); box-shadow: var(--shadow-card); }
+
+/* スライダー */
+.slider { display: grid; gap: var(--space-1); }
+.slider__head { display: flex; justify-content: space-between; font-size: var(--fs-sm); }
+.slider__ends { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--color-text-sub); }
+.slider input { width: 100%; accent-color: var(--color-ground); }
+
+/* レベルメーター */
+.meter { height: 10px; background: var(--color-kinari); border-radius: var(--radius-pill); overflow: hidden; }
+.meter__bar { height: 100%; width: 0; background: linear-gradient(90deg, var(--color-ground), var(--color-kin)); transition: width .08s; }
+
+/* 録音ボタン */
+.rec { width: 120px; height: 120px; margin: 0 auto; border-radius: 50%; border: 6px solid var(--color-kinari); background: var(--color-ground); color: var(--color-on-ground); font: inherit; font-weight: var(--fw-bold); cursor: pointer; display: grid; place-items: center; }
+.rec.is-recording { background: var(--color-kin); animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 12px rgba(184, 149, 90, .25); } }
+
+/* 進捗 */
+.progress { height: 6px; background: var(--color-kinari); border-radius: var(--radius-pill); overflow: hidden; }
+.progress__bar { height: 100%; width: 0; background: var(--color-kin); transition: width .1s linear; }
+
+/* =========================================================
+   4. 画面
+   ========================================================= */
+.screen { display: none; flex: 1; flex-direction: column; }
+.screen.is-active { display: flex; }
+.screen__body { flex: 1; display: flex; flex-direction: column; gap: var(--space-4); padding: 0 var(--space-4) var(--space-6); }
+
+/* ホーム */
+.home { justify-content: center; gap: var(--space-6); padding: var(--space-7) var(--space-4); }
+.home__logo { text-align: center; }
+.home__name { font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--color-ground); letter-spacing: .1em; }
+.home__tag { font-size: var(--fs-sm); color: var(--color-text-sub); margin-top: var(--space-2); }
+.home__actions { display: grid; gap: var(--space-4); }
+.home__privacy { text-align: center; font-size: var(--fs-xs); color: var(--color-text-sub); }
+
+/* 録音 */
+.rec-time { text-align: center; font-size: var(--fs-xl); font-variant-numeric: tabular-nums; }
+
+/* 補正：音程グラフ */
+.pitch-canvas { width: 100%; height: 180px; display: block; background: var(--color-surface); border-radius: var(--radius-sm); touch-action: pan-y; cursor: grab; }
+.card__hint { float: right; }
+.seek { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); font-size: var(--fs-xs); color: var(--color-text-sub); font-variant-numeric: tabular-nums; }
+.seek input { flex: 1; accent-color: var(--color-ground); }
+.legend { display: flex; gap: var(--space-4); font-size: var(--fs-xs); color: var(--color-text-sub); margin-top: var(--space-2); }
+.legend i { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin-right: 4px; }
+.custom { display: none; gap: var(--space-4); }
+.custom.is-open { display: grid; }
+.custom__actions { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+.custom__note { font-size: var(--fs-xs); color: var(--color-text-sub); }
+.link-btn { border: none; background: none; padding: var(--space-2) 0; font: inherit; font-size: var(--fs-sm); color: var(--color-ground); text-decoration: underline; cursor: pointer; }
+.preset-desc { margin: var(--space-2) 0 0; font-size: var(--fs-sm); color: var(--color-text-sub); min-height: 1.5em; }
+
+/* 書き出し */
+.done { text-align: center; padding: var(--space-6) 0 var(--space-2); }
+.done__mark { width: 72px; height: 72px; border-radius: 50%; margin: 0 auto var(--space-4); background: var(--color-ground); color: var(--color-on-ground); display: grid; place-items: center; font-size: var(--fs-xl); }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ======================= 画面1：ホーム ======================= -->
+  <section class="screen home is-active" id="screen-home">
+    <div class="home__logo">
+      <div class="home__name">ウタナオ</div>
+      <div class="home__tag">歌をワンタップで、きれいな声に。</div>
+    </div>
+    <div class="home__actions">
+      <button class="btn btn--primary btn--big" data-go="record">🎙 録音する</button>
+      <button class="btn btn--ghost btn--big" id="btn-pick-file">📁 ファイルを選ぶ</button>
+      <input type="file" id="input-file" accept="audio/*" hidden>
+    </div>
+    <p class="home__privacy">音声はこの端末の中だけで処理されます</p>
+  </section>
+
+  <!-- ======================= 画面2：録音 ======================= -->
+  <section class="screen" id="screen-record">
+    <header class="header">
+      <button class="header__back" data-go="home" aria-label="戻る">←</button>
+      <div class="header__title">録音</div>
+    </header>
+    <div class="screen__body">
+      <div class="notice">🎧 伴奏を流す場合はヘッドホンをつけてください（伴奏が録音に入るのを防ぎます）</div>
+      <div class="card">
+        <div class="card__label">伴奏（任意）</div>
+        <button class="btn btn--ghost" id="btn-pick-backing">伴奏ファイルを選ぶ</button>
+        <input type="file" id="input-backing" accept="audio/*" hidden>
+      </div>
+      <div class="rec-time" id="rec-time">0:00</div>
+      <button class="rec" id="btn-rec">録音</button>
+      <div class="card">
+        <div class="card__label">入力レベル</div>
+        <div class="meter"><div class="meter__bar" id="meter-bar"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 画面3：補正 ======================= -->
+  <section class="screen" id="screen-fix">
+    <header class="header">
+      <button class="header__back" data-go="home" aria-label="戻る">←</button>
+      <div class="header__title" id="fix-title">補正</div>
+    </header>
+    <div class="screen__body">
+      <div>
+        <div class="card__label">仕上がり</div>
+        <div class="segment" id="preset">
+          <button class="segment__item" data-preset="kirei" aria-pressed="true">綺麗</button>
+          <button class="segment__item" data-preset="clear">クリア</button>
+          <button class="segment__item" data-preset="stream">配信向け</button>
+          <button class="segment__item" data-preset="custom">カスタム</button>
+        </div>
+        <p class="preset-desc" id="preset-desc"></p>
+      </div>
+
+      <!-- カスタム時のみ表示 -->
+      <div class="card custom" id="custom">
+        <div class="slider"><div class="slider__head"><span>補正の強さ</span><span data-out="strength"></span></div>
+          <input type="range" min="0" max="100" data-key="strength"></div>
+        <div class="slider"><div class="slider__head"><span>補正スピード</span><span data-out="speed"></span></div>
+          <input type="range" min="0" max="100" data-key="speed"><div class="slider__ends"><span>ゆっくり自然</span><span>速い機械的</span></div></div>
+        <div class="slider"><div class="slider__head"><span>声の明るさ</span><span data-out="bright"></span></div>
+          <input type="range" min="0" max="100" data-key="bright"><div class="slider__ends"><span>こもり</span><span>きらきら</span></div></div>
+        <div class="slider"><div class="slider__head"><span>空間の広がり</span><span data-out="space"></span></div>
+          <input type="range" min="0" max="100" data-key="space"></div>
+        <div class="slider"><div class="slider__head"><span>ノイズ除去の強さ</span><span data-out="denoise"></span></div>
+          <input type="range" min="0" max="100" data-key="denoise"></div>
+        <div class="custom__actions">
+          <span class="custom__note">設定はこの端末に保存されます</span>
+          <button class="link-btn" id="btn-custom-reset">「綺麗」の設定に戻す</button>
+        </div>
+      </div>
+
+      <button class="btn btn--accent btn--big" id="btn-auto">✨ おまかせ補正</button>
+      <div class="progress hidden" id="progress"><div class="progress__bar" id="progress-bar"></div></div>
+
+      <div class="card">
+        <div class="card__label">聴き比べ</div>
+        <div class="ab" id="ab">
+          <button class="ab__item" data-ab="before" aria-pressed="true">補正前</button>
+          <button class="ab__item" data-ab="after" disabled>補正後</button>
+        </div>
+        <div style="height: var(--space-3)"></div>
+        <button class="btn btn--ghost" id="btn-play">▶ 再生</button>
+        <div class="seek">
+          <span id="time-cur">0:00</span>
+          <input type="range" id="seek" min="0" max="1000" value="0" aria-label="再生位置">
+          <span id="time-dur">0:00</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card__label">音程 <span id="pitch-key"></span><span class="card__hint">左右にドラッグで移動</span></div>
+        <canvas class="pitch-canvas" id="pitch-canvas"></canvas>
+        <div class="legend">
+          <span><i style="background: var(--color-text-sub)"></i>歌った音程</span>
+          <span><i style="background: var(--color-kin)"></i>補正後</span>
+          <span><i style="background: var(--color-kin-soft); height: 8px"></i>目標の音</span>
+        </div>
+      </div>
+
+      <button class="btn btn--primary" id="btn-to-export" disabled>書き出しへ →</button>
+    </div>
+  </section>
+
+  <!-- ======================= 画面4：書き出し ======================= -->
+  <section class="screen" id="screen-export">
+    <header class="header">
+      <button class="header__back" data-go="fix" aria-label="戻る">←</button>
+      <div class="header__title">書き出し</div>
+    </header>
+    <div class="screen__body">
+      <div class="done"><div class="done__mark">✓</div><div>補正できました</div></div>
+      <button class="btn btn--primary" id="btn-wav">WAVでダウンロード</button>
+      <button class="btn btn--ghost" id="btn-mp3">MP3でダウンロード</button>
+      <button class="btn btn--ghost" data-go="home">最初に戻る</button>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* =========================================================
+   JS 1. 設定：プリセット（ステップ3〜5で実処理に接続）
+   ========================================================= */
+// strength〜denoise：カスタムのスライダーと同じ5項目（0〜100）
+// comp / deess / warm / loud：プリセット専用の内部値（0〜100、カスタムは CUSTOM_FX を使用）
+const PRESETS = {
+  kirei:  { strength: 55, speed: 30, bright: 45, space: 50, denoise: 30, comp: 35, deess: 40, warm: 70, loud: 40 },
+  clear:  { strength: 75, speed: 55, bright: 75, space: 25, denoise: 40, comp: 50, deess: 80, warm: 30, loud: 50 },
+  stream: { strength: 45, speed: 40, bright: 55, space: 3,  denoise: 80, comp: 85, deess: 55, warm: 40, loud: 90 },
+};
+const CUSTOM_FX = { comp: 45, deess: 50, warm: 50, loud: 50 };
+const PRESET_DESC = {
+  kirei:  '自然な音程補正と、温かみのある声。いちばん標準の仕上がり。',
+  clear:  '音程をしっかり合わせ、明るく輪郭のはっきりした声に。',
+  stream: '雑音を抑えて音量をそろえ、通話・配信でも聞き取りやすい声に。',
+  custom: '5つの項目を自由に調整できます。',
+};
+const STORAGE_KEY = 'utanao.custom';
+const STORAGE_PRESET = 'utanao.preset';
+
+/* =========================================================
+   JS 2. 状態
+   ========================================================= */
+let audioCtx = null;
+function ctx() {
+  // iOS Safari はユーザー操作の中で作成・resume する必要がある
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+const state = {
+  source: null,      // { name, buffer: AudioBuffer }
+  output: null,      // 補正後の AudioBuffer（ステップ3以降で実処理）
+  processed: false,  // 補正済みか
+  preset: loadPreset(),
+  custom: loadCustom(),
+  ab: 'before',
+};
+
+/* =========================================================
+   JS 3. 画面遷移
+   ========================================================= */
+const $ = (s) => document.querySelector(s);
+function go(name) {
+  document.querySelectorAll('.screen').forEach(el => el.classList.toggle('is-active', el.id === 'screen-' + name));
+  if (name === 'fix') drawPitch();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { cancelRec(); stopPlay(); go(b.dataset.go); }));
+
+/* =========================================================
+   JS 4. ホーム：ファイル選択
+   ========================================================= */
+$('#btn-pick-file').onclick = () => $('#input-file').click();
+$('#input-file').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const ac = ctx();
+  try { setSource(f.name.replace(/\.[^.]+$/, ''), await decode(ac, await f.arrayBuffer())); }
+  catch { alert('このファイルは読み込めませんでした。WAV / MP3 / M4A などの音声ファイルを選んでください。'); }
+};
+// Safari 旧版のコールバック形式にも対応
+const decode = (ac, ab) => new Promise((ok, ng) => ac.decodeAudioData(ab, ok, ng));
+
+function setSource(name, buffer) {
+  state.source = { name, buffer }; state.output = null; state.processed = false; state.pitch = null; state.viewPos = 0;
+  $('#fix-title').textContent = name;
+  updateFixUI(); go('fix'); updatePlayhead();
+}
+
+/* =========================================================
+   JS 5. 録音（マイク → MediaRecorder、伴奏は同時再生のみ）
+   ※ 伴奏は録音ファイルには混ぜない（声だけを補正するため）
+   ========================================================= */
+const rec = { stream: null, recorder: null, chunks: [], timer: null, start: 0, backing: null, backingNode: null, analyser: null };
+$('#btn-pick-backing').onclick = () => $('#input-backing').click();
+$('#input-backing').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { rec.backing = await decode(ctx(), await f.arrayBuffer()); $('#btn-pick-backing').textContent = '🎵 ' + f.name; }
+  catch { alert('伴奏ファイルを読み込めませんでした。'); }
+};
+$('#btn-rec').onclick = () => rec.recorder ? finishRec() : startRec();
+
+async function startRec() {
+  const ac = ctx();
+  try {
+    // 歌声向け：ブラウザの自動加工はすべてオフ
+    rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  } catch { alert('マイクを使えませんでした。ブラウザのマイク許可を確認してください。'); return; }
+
+  // レベルメーター
+  rec.analyser = ac.createAnalyser(); rec.analyser.fftSize = 1024;
+  ac.createMediaStreamSource(rec.stream).connect(rec.analyser);
+
+  rec.chunks = [];
+  rec.recorder = new MediaRecorder(rec.stream);
+  rec.recorder.ondataavailable = (e) => e.data.size && rec.chunks.push(e.data);
+  rec.recorder.start();
+
+  if (rec.backing) {
+    rec.backingNode = ac.createBufferSource(); rec.backingNode.buffer = rec.backing;
+    rec.backingNode.connect(ac.destination); rec.backingNode.start();
+  }
+
+  rec.start = performance.now();
+  $('#btn-rec').textContent = '停止'; $('#btn-rec').classList.add('is-recording');
+  const data = new Float32Array(rec.analyser.fftSize);
+  const tick = () => {
+    if (!rec.recorder) return;
+    $('#rec-time').textContent = fmt((performance.now() - rec.start) / 1000);
+    rec.analyser.getFloatTimeDomainData(data);
+    let peak = 0; for (const v of data) peak = Math.max(peak, Math.abs(v));
+    $('#meter-bar').style.width = Math.min(100, Math.sqrt(peak) * 110) + '%';
+    rec.timer = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+function stopRecCore() {
+  cancelAnimationFrame(rec.timer);
+  try { rec.backingNode && rec.backingNode.stop(); } catch {}
+  rec.backingNode = null;
+  rec.stream && rec.stream.getTracks().forEach(t => t.stop());
+  $('#btn-rec').textContent = '録音'; $('#btn-rec').classList.remove('is-recording');
+  $('#meter-bar').style.width = '0';
+}
+function cancelRec() {
+  if (!rec.recorder) return;
+  rec.recorder.onstop = null; rec.recorder.stop(); rec.recorder = null; stopRecCore();
+}
+function finishRec() {
+  const r = rec.recorder; rec.recorder = null;
+  const sec = (performance.now() - rec.start) / 1000;
+  r.onstop = async () => {
+    const blob = new Blob(rec.chunks, { type: r.mimeType });
+    try { setSource('録音 ' + fmt(sec), await decode(ctx(), await blob.arrayBuffer())); }
+    catch { alert('録音データを読み込めませんでした。もう一度お試しください。'); }
+  };
+  r.stop(); stopRecCore();
+}
+const fmt = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+
+/* =========================================================
+   JS 6. 補正画面：プリセット・カスタム
+   ========================================================= */
+$('#preset').onclick = (e) => {
+  const b = e.target.closest('[data-preset]'); if (!b) return;
+  state.preset = b.dataset.preset;
+  try { localStorage.setItem(STORAGE_PRESET, state.preset); } catch {}
+  invalidate();
+};
+function loadPreset() {
+  try { const v = localStorage.getItem(STORAGE_PRESET); return PRESET_DESC[v] ? v : 'kirei'; } catch { return 'kirei'; }
+}
+$('#btn-custom-reset').onclick = () => {
+  const { strength, speed, bright, space, denoise } = PRESETS.kirei;
+  state.custom = { strength, speed, bright, space, denoise };
+  document.querySelectorAll('#custom input').forEach(inp => inp.value = state.custom[inp.dataset.key]);
+  saveCustom(); invalidate();
+};
+document.querySelectorAll('#custom input').forEach(inp => {
+  inp.value = state.custom[inp.dataset.key];
+  inp.oninput = () => { state.custom[inp.dataset.key] = +inp.value; saveCustom(); invalidate(); };
+});
+// 設定を変えたら補正をやり直す必要がある
+function invalidate() { stopPlay(); state.processed = false; state.output = null; updateFixUI(); }
+function currentParams() { return state.preset === 'custom' ? { ...CUSTOM_FX, ...state.custom } : PRESETS[state.preset]; }
+function loadCustom() {
+  try { return { ...PRESETS.kirei, ...JSON.parse(localStorage.getItem(STORAGE_KEY)) }; }
+  catch { return { ...PRESETS.kirei }; }
+}
+function saveCustom() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.custom)); } catch {} }
+
+function updateFixUI() {
+  document.querySelectorAll('[data-preset]').forEach(b => b.setAttribute('aria-pressed', b.dataset.preset === state.preset));
+  $('#custom').classList.toggle('is-open', state.preset === 'custom');
+  $('#preset-desc').textContent = PRESET_DESC[state.preset];
+  document.querySelectorAll('[data-out]').forEach(o => o.textContent = state.custom[o.dataset.out]);
+  $('[data-ab="after"]').disabled = !state.processed;
+  $('#btn-to-export').disabled = !state.processed;
+  if (!state.processed) setAB('before');
+  drawPitch();
+}
+
+/* =========================================================
+   JS 7. おまかせ補正
+   ※ ピッチ補正はステップ4で、仕上げチェーンの前に入る
+   ========================================================= */
+$('#btn-auto').onclick = async () => {
+  if (!state.source) return;
+  stopPlay();
+  const btn = $('#btn-auto'); btn.disabled = true; btn.textContent = '補正中…';
+  $('#progress').classList.remove('hidden');
+  const t0 = performance.now();
+  try {
+    state.output = await processVoice(state.source.buffer, currentParams(), (p) => $('#progress-bar').style.width = p + '%');
+    console.log('補正時間', ((performance.now() - t0) / 1000).toFixed(2) + 's');
+    state.processed = true;
+  } catch (err) {
+    console.error(err); alert('補正中にエラーが起きました。もう一度お試しください。');
+  }
+  $('#progress').classList.add('hidden'); btn.disabled = false; btn.textContent = '✨ もう一度補正';
+  updateFixUI(); if (state.processed) setAB('after');
+};
+
+/* =========================================================
+   JS 7-1. 声の仕上げチェーン
+   ノイズ除去 → ハイパス → ディエッサー → コンプ → EQ → リバーブ → リミッター
+   JS段（サンプル単位）と OfflineAudioContext 段（Web Audio のノード）を組み合わせる
+   ========================================================= */
+const FX = {
+  hpfHz: 90,              // ハイパス：低い雑音・吹かれをカット
+  deessHz: 6500,          // ディエッサー：サ行の帯域
+  reverbSec: 1.8,         // リバーブの長さ
+  reverbMaxWet: 0.35,     // 空間の広がり100のときの残響量
+  targetRmsDb: -20,       // 音量の目安（loud=0）
+  targetRmsDbLoud: -14,   // 音量の目安（loud=100）
+  ceilingDb: -1,          // リミッターの上限
+};
+const dbToGain = (db) => Math.pow(10, db / 20);
+const nextFrame = () => new Promise(r => setTimeout(r, 0));
+
+async function processVoice(input, p, onProgress = () => {}) {
+  const sr = input.sampleRate;
+  // 各チャンネルをコピーして作業（元音声は聴き比べ用にそのまま残す）
+  let chs = [...Array(input.numberOfChannels)].map((_, c) => Float32Array.from(input.getChannelData(c)));
+
+  onProgress(5);  normalizePeak(chs, 0.9);
+  // ピッチ補正（音程検出は元音声ごとにキャッシュ）
+  await nextFrame();
+  const src = state.source;
+  if (src && src.buffer === input && !src.analysis) src.analysis = analyzePitch(chs, sr);
+  const analysis = (src && src.buffer === input && src.analysis) || analyzePitch(chs, sr);
+  onProgress(20); await nextFrame();
+  const plan = planCorrection(analysis, p.strength / 100, p.speed / 100);
+  state.pitch = plan;
+  if (p.strength > 0) chs = psola(chs, sr, analysis, plan);
+  onProgress(30); await nextFrame(); denoise(chs, sr, p.denoise / 100);
+  onProgress(45); await nextFrame(); chs.forEach(x => biquad(x, coefs('highpass', FX.hpfHz, sr, 0.707)));
+  onProgress(50); await nextFrame(); deess(chs, sr, p.deess / 100);
+  onProgress(55); await nextFrame();
+  const rendered = await renderNodes(chs, sr, p);       // コンプ → EQ → リバーブ
+  onProgress(85); await nextFrame();
+  const out = [rendered.getChannelData(0), rendered.getChannelData(1)];
+  limit(out, sr, p.loud / 100);
+  onProgress(100);
+  return rendered;
+}
+
+/* =========================================================
+   JS 7-2. ピッチ補正
+   音程検出（YIN）→ キー自動検出 → 最寄りの音へ補正（TD-PSOLA）
+   PSOLA は1周期ずつの波形を並べ直す方式なので、声の響き（フォルマント）が保たれる
+   ========================================================= */
+const PITCH = {
+  hopSec: 0.01,        // 解析の間隔
+  winSec: 0.04,        // 解析窓
+  detectSr: 12000,     // 音程検出用の間引き後サンプルレート
+  minHz: 70, maxHz: 1000,
+  yinThreshold: 0.15,
+  silenceDb: -35,      // 最大音量からこれ以下は無音扱い
+  slowSec: 0.25,       // 補正スピード0のときの追従時間
+  fastSec: 0.004,      // 補正スピード100のときの追従時間
+};
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const MAJOR = [0, 2, 4, 5, 7, 9, 11];
+const hzToMidi = (f) => 69 + 12 * Math.log2(f / 440);
+
+// --- 音程検出（YIN）---
+function analyzePitch(chs, sr) {
+  const n = chs[0].length;
+  const mono = new Float32Array(n);
+  for (const x of chs) for (let i = 0; i < n; i++) mono[i] += x[i] / chs.length;
+
+  // 低域通過してから間引き
+  const step = Math.max(1, Math.round(sr / PITCH.detectSr)), dsr = sr / step;
+  const lp = biquad(mono, coefs('lowpass', dsr * 0.45, sr, 0.707), new Float32Array(n));
+  const ds = new Float32Array(Math.floor(n / step));
+  for (let i = 0; i < ds.length; i++) ds[i] = lp[i * step];
+
+  const hop = Math.round(dsr * PITCH.hopSec), W = Math.round(dsr * PITCH.winSec);
+  const tMin = Math.floor(dsr / PITCH.maxHz), tMax = Math.ceil(dsr / PITCH.minHz);
+  const nf = Math.floor(n / (sr * PITCH.hopSec));
+  const rms = new Float32Array(nf), hz = new Float32Array(nf);
+  let maxRms = 0;
+  for (let f = 0; f < nf; f++) {
+    let s = 0; const o = f * hop;
+    for (let j = 0; j < W && o + j < ds.length; j++) s += ds[o + j] * ds[o + j];
+    rms[f] = Math.sqrt(s / W); if (rms[f] > maxRms) maxRms = rms[f];
+  }
+  const silence = maxRms * dbToGain(PITCH.silenceDb);
+  const d = new Float32Array(tMax + 1);
+  for (let f = 0; f < nf; f++) {
+    const o = f * hop;
+    if (rms[f] < silence || o + W + tMax >= ds.length) continue;
+    // 差分関数 → 累積平均正規化
+    let run = 0; d[0] = 1;
+    for (let t = 1; t <= tMax; t++) {
+      let s = 0;
+      for (let j = 0; j < W; j++) { const v = ds[o + j] - ds[o + j + t]; s += v * v; }
+      run += s; d[t] = run > 0 ? s * t / run : 1;
+    }
+    let tau = -1;
+    for (let t = tMin; t < tMax; t++) {
+      if (d[t] < PITCH.yinThreshold) { while (t + 1 < tMax && d[t + 1] < d[t]) t++; tau = t; break; }
+    }
+    if (tau < 0) continue; // 周期性なし＝無声
+    // 放物線補間
+    const a = d[tau - 1], b = d[tau], c = d[tau + 1], den = a - 2 * b + c;
+    const t = den ? tau + 0.5 * (a - c) / den : tau;
+    hz[f] = dsr / t;
+  }
+  // 3点メディアンで単発の誤検出を除去
+  const midi = new Float32Array(nf).fill(NaN);
+  for (let f = 0; f < nf; f++) {
+    const v = [hz[f - 1] || 0, hz[f], hz[f + 1] || 0].sort((x, y) => x - y)[1];
+    if (hz[f] && v) midi[f] = hzToMidi(v);
+  }
+  return { hopSamples: sr * PITCH.hopSec, midi, key: detectKey(midi) };
+}
+
+// --- キー自動検出（Krumhansl のキープロファイル）---
+function detectKey(midi) {
+  const hist = new Array(12).fill(0);
+  for (const m of midi) if (!isNaN(m)) hist[((Math.round(m) % 12) + 12) % 12]++;
+  const PROF = {
+    major: [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88],
+    minor: [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17],
+  };
+  const corr = (a, b) => {
+    const ma = a.reduce((s, v) => s + v) / 12, mb = b.reduce((s, v) => s + v) / 12;
+    let n = 0, da = 0, db = 0;
+    for (let i = 0; i < 12; i++) { n += (a[i] - ma) * (b[i] - mb); da += (a[i] - ma) ** 2; db += (b[i] - mb) ** 2; }
+    return da && db ? n / Math.sqrt(da * db) : 0;
+  };
+  let best = { score: -2, tonic: 0, mode: 'major' };
+  for (const mode of ['major', 'minor']) for (let k = 0; k < 12; k++) {
+    const rot = PROF[mode].map((_, i) => PROF[mode][(i - k + 12) % 12]);
+    const score = corr(hist, rot);
+    if (score > best.score) best = { score, tonic: k, mode };
+  }
+  const majorTonic = best.mode === 'major' ? best.tonic : (best.tonic + 3) % 12; // 短調は平行長調の音階を使う
+  return {
+    name: NOTE_NAMES[best.tonic] + (best.mode === 'minor' ? 'm' : ''),
+    scale: MAJOR.map(i => (majorTonic + i) % 12),
+  };
+}
+
+// --- 補正量の計画：音ごとの目標 → 強さ・スピードで滑らかに ---
+function planCorrection(an, strength, speed) {
+  const { midi, key } = an, nf = midi.length;
+  const shift = new Float32Array(nf), target = new Float32Array(nf).fill(NaN);
+  const nearest = (m) => {
+    let best = 0, bd = 99;
+    for (let o = Math.floor(m) - 2; o <= Math.ceil(m) + 2; o++) {
+      if (!key.scale.includes(((o % 12) + 12) % 12)) continue;
+      if (Math.abs(m - o) < bd) { bd = Math.abs(m - o); best = o; }
+    }
+    return best;
+  };
+  const tau = PITCH.slowSec * (1 - speed) ** 2 + PITCH.fastSec;
+  const k = 1 - Math.exp(-PITCH.hopSec / tau);
+  let cur = null, sm = 0;
+  for (let f = 0; f < nf; f++) {
+    const m = midi[f];
+    if (isNaN(m)) { cur = null; continue; }
+    const cand = nearest(m);
+    // ヒステリシス：ビブラートで音が行ったり来たりしないように
+    if (cur === null || (cand !== cur && Math.abs(m - cand) < Math.abs(m - cur) - 0.3)) cur = cand;
+    const want = (cur - m) * strength;
+    sm = isNaN(target[f - 1]) ? want : sm + (want - sm) * k;
+    target[f] = cur; shift[f] = sm;
+  }
+  return { midi, target, shift, key: key.name, hopSec: PITCH.hopSec };
+}
+
+// --- TD-PSOLA：1周期ずつの粒を、目標の周期で並べ直す ---
+function psola(chs, sr, an, plan) {
+  const n = chs[0].length, hop = an.hopSamples, nf = plan.midi.length;
+  const frameAt = (i) => Math.min(nf - 1, Math.floor(i / hop));
+  const periodAt = (i) => { const m = plan.midi[frameAt(i)]; return isNaN(m) ? 0 : sr / (440 * 2 ** ((m - 69) / 12)); };
+  const UNV = Math.round(sr * 0.005); // 無声部分は5ms間隔でそのまま並べる
+
+  // 解析マーク（有声部は周期ごと、波形の山に合わせる）
+  const mono = chs.length === 1 ? chs[0] : chs[0].map((v, i) => (v + chs[1][i]) / 2);
+  const marks = [];
+  for (let t = 0; t < n;) {
+    const P = periodAt(t);
+    if (P) {
+      const lo = Math.max(0, Math.round(t - P / 4)), hi = Math.min(n - 1, Math.round(t + P / 4));
+      let pk = t, pv = -1;
+      for (let j = lo; j <= hi; j++) if (Math.abs(mono[j]) > pv) { pv = Math.abs(mono[j]); pk = j; }
+      if (marks.length && pk <= marks[marks.length - 1].t) pk = Math.round(t);
+      marks.push({ t: pk, P: Math.round(P) });
+      t = pk + Math.round(P);
+    } else { marks.push({ t, P: UNV }); t += UNV; }
+  }
+
+  // 合成：出力側の位置 ts ごとに、いちばん近い解析マークの粒を置く
+  const out = chs.map(() => new Float32Array(n)), wsum = new Float32Array(n);
+  let mi = 0;
+  for (let ts = 0; ts < n;) {
+    while (mi + 1 < marks.length && Math.abs(marks[mi + 1].t - ts) <= Math.abs(marks[mi].t - ts)) mi++;
+    const { t: ta, P } = marks[mi];
+    const voiced = P !== UNV && periodAt(ta) > 0;
+    const ratio = voiced ? 2 ** (plan.shift[frameAt(ta)] / 12) : 1;
+    for (let j = -P; j < P; j++) {
+      const si = ta + j, di = ts + j;
+      if (si < 0 || si >= n || di < 0 || di >= n) continue;
+      const w = 0.5 + 0.5 * Math.cos(Math.PI * j / P);
+      for (let c = 0; c < chs.length; c++) out[c][di] += chs[c][si] * w;
+      wsum[di] += w;
+    }
+    ts += Math.max(1, Math.round(P / ratio));
+  }
+  for (const x of out) for (let i = 0; i < n; i++) if (wsum[i] > 1e-3) x[i] /= wsum[i];
+  return out;
+}
+
+// --- ピーク正規化 ---
+function normalizePeak(chs, target) {
+  let peak = 0;
+  for (const x of chs) for (let i = 0; i < x.length; i++) { const a = Math.abs(x[i]); if (a > peak) peak = a; }
+  if (peak > 0) { const g = target / peak; for (const x of chs) for (let i = 0; i < x.length; i++) x[i] *= g; }
+}
+
+// --- ノイズ除去（ダウンワード・エキスパンダー）---
+// 無音部分の音量から雑音レベルを推定し、それより少し大きい音までを下げる
+function denoise(chs, sr, amount) {
+  if (amount <= 0) return;
+  const frame = Math.round(sr * 0.01), n = chs[0].length, nf = Math.ceil(n / frame);
+  const rms = new Float32Array(nf);
+  for (let f = 0; f < nf; f++) {
+    let s = 0, cnt = 0;
+    for (const x of chs) for (let i = f * frame; i < Math.min(n, (f + 1) * frame); i++) { s += x[i] * x[i]; cnt++; }
+    rms[f] = Math.sqrt(s / cnt);
+  }
+  const floor = Float32Array.from(rms).sort()[Math.floor(nf * 0.1)] + 1e-5; // 下位10%を雑音とみなす
+  const thr = floor * dbToGain(6 + amount * 10);
+  const minGain = dbToGain(-amount * 30);
+  const att = Math.exp(-1 / (sr * 0.005)), rel = Math.exp(-1 / (sr * 0.08));
+  let g = 1;
+  for (let i = 0; i < n; i++) {
+    const level = rms[Math.floor(i / frame)];
+    const target = level >= thr ? 1 : Math.max(minGain, Math.pow(level / thr, 1 + amount * 2));
+    g = target > g ? target + att * (g - target) : target + rel * (g - target);
+    for (const x of chs) x[i] *= g;
+  }
+}
+
+// --- バイクアッド（RBJ）---
+function coefs(type, f, sr, q, gainDb = 0) {
+  const w = 2 * Math.PI * f / sr, cos = Math.cos(w), alpha = Math.sin(w) / (2 * q);
+  let b0, b1, b2, a0, a1, a2;
+  if (type === 'highpass') { b0 = (1 + cos) / 2; b1 = -(1 + cos); b2 = b0; a0 = 1 + alpha; a1 = -2 * cos; a2 = 1 - alpha; }
+  else if (type === 'lowpass') { b0 = (1 - cos) / 2; b1 = 1 - cos; b2 = b0; a0 = 1 + alpha; a1 = -2 * cos; a2 = 1 - alpha; }
+  else /* bandpass */      { b0 = alpha; b1 = 0; b2 = -alpha; a0 = 1 + alpha; a1 = -2 * cos; a2 = 1 - alpha; }
+  return [b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0];
+}
+function biquad(x, [b0, b1, b2, a1, a2], out = x) {
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < x.length; i++) {
+    const x0 = x[i], y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1; x1 = x0; y2 = y1; y1 = y0; out[i] = y0;
+  }
+  return out;
+}
+
+// --- ディエッサー（帯域分割）---
+// サ行帯域だけを取り出し、強すぎる瞬間だけその帯域を下げる
+function deess(chs, sr, amount) {
+  if (amount <= 0) return;
+  const c = coefs('bandpass', FX.deessHz, sr, 0.8);
+  const thr = dbToGain(-30 + (1 - amount) * 10);
+  const att = Math.exp(-1 / (sr * 0.001)), rel = Math.exp(-1 / (sr * 0.06));
+  for (const x of chs) {
+    const band = biquad(x, c, new Float32Array(x.length));
+    let env = 0;
+    for (let i = 0; i < x.length; i++) {
+      const a = Math.abs(band[i]);
+      env = a > env ? a + att * (env - a) : a + rel * (env - a);
+      if (env > thr) {
+        const g = Math.pow(thr / env, 0.5 + amount); // 帯域ゲイン（1未満）
+        x[i] -= band[i] * (1 - g);
+      }
+    }
+  }
+}
+
+// --- コンプ → EQ → リバーブ（OfflineAudioContext）---
+async function renderNodes(chs, sr, p) {
+  const n = chs[0].length, tail = Math.round(sr * (p.space > 2 ? FX.reverbSec : 0.05));
+  const oc = new OfflineAudioContext(2, n + tail, sr);
+  const buf = oc.createBuffer(chs.length, n, sr);
+  chs.forEach((x, c) => buf.copyToChannel(x, c));
+  const src = oc.createBufferSource(); src.buffer = buf;
+
+  // コンプ：強いほど深く・比率高く
+  const comp = oc.createDynamicsCompressor();
+  comp.threshold.value = -12 - p.comp * 0.24;
+  comp.ratio.value = 2 + p.comp * 0.06;
+  comp.knee.value = 10; comp.attack.value = 0.005; comp.release.value = 0.15;
+
+  // EQ：温かみ（低中域）・こもり取り・明るさ（存在感＋空気感）
+  const bright = (p.bright - 50) / 50; // -1〜1
+  const eq = [
+    ['lowshelf', 220, 0.7, p.warm / 100 * 3],
+    ['peaking',  400, 1.0, -2],
+    ['peaking', 3500, 1.0, bright * 3],
+    ['highshelf', 10000, 0.7, bright * 6],
+  ].map(([type, f, q, g]) => { const b = oc.createBiquadFilter(); Object.assign(b, { type }); b.frequency.value = f; b.Q.value = q; b.gain.value = g; return b; });
+
+  // リバーブ：生成したインパルス応答（外部ファイル不要）
+  const wet = p.space / 100 * FX.reverbMaxWet;
+  const dry = oc.createGain(); dry.gain.value = 1;
+  const wetGain = oc.createGain(); wetGain.gain.value = wet;
+  const conv = oc.createConvolver(); conv.buffer = makeImpulse(oc, FX.reverbSec);
+
+  src.connect(comp);
+  const eqOut = eq.reduce((prev, node) => (prev.connect(node), node), comp);
+  eqOut.connect(dry).connect(oc.destination);
+  if (wet > 0.005) eqOut.connect(conv).connect(wetGain).connect(oc.destination);
+  src.start();
+  return oc.startRendering();
+}
+function makeImpulse(oc, sec) {
+  const sr = oc.sampleRate, len = Math.round(sr * sec), pre = Math.round(sr * 0.02);
+  const ir = oc.createBuffer(2, len, sr);
+  for (let c = 0; c < 2; c++) {
+    const d = ir.getChannelData(c);
+    let lp = 0;
+    for (let i = pre; i < len; i++) {
+      lp = lp * 0.6 + (Math.random() * 2 - 1) * 0.4;           // 高域を少し丸める
+      d[i] = lp * Math.pow(1 - (i - pre) / (len - pre), 3.5);
+    }
+  }
+  return ir;
+}
+
+// --- 音量合わせ＋リミッター（先読み付き）---
+function limit(chs, sr, loud) {
+  const n = chs[0].length;
+  // 有音部分のRMSで音量を合わせる
+  let s = 0, cnt = 0;
+  for (const x of chs) for (let i = 0; i < n; i++) if (Math.abs(x[i]) > 0.003) { s += x[i] * x[i]; cnt++; }
+  const rms = Math.sqrt(s / Math.max(1, cnt)) || 1e-4;
+  const targetDb = FX.targetRmsDb + (FX.targetRmsDbLoud - FX.targetRmsDb) * loud;
+  const pre = dbToGain(targetDb) / rms, ceil = dbToGain(FX.ceilingDb);
+
+  // 64サンプル単位で必要なゲインを求め、先読み（逆方向）とリリース（順方向）で滑らかにする
+  const B = 64, nb = Math.ceil(n / B), g = new Float32Array(nb);
+  for (let b = 0; b < nb; b++) {
+    let pk = 0;
+    for (const x of chs) for (let i = b * B; i < Math.min(n, (b + 1) * B); i++) { const a = Math.abs(x[i]) * pre; if (a > pk) pk = a; }
+    g[b] = pk > ceil ? ceil / pk : 1;
+  }
+  const att = Math.exp(-B / (sr * 0.003)), rel = Math.exp(-B / (sr * 0.12));
+  for (let b = nb - 2; b >= 0; b--) g[b] = Math.min(g[b], 1 - (1 - g[b + 1]) * att);
+  for (let b = 1; b < nb; b++) g[b] = Math.min(g[b], 1 - (1 - g[b - 1]) * rel);
+  for (const x of chs) for (let i = 0; i < n; i++) {
+    const b = i / B, b0 = Math.floor(b), b1 = Math.min(nb - 1, b0 + 1);
+    const gi = g[b0] + (g[b1] - g[b0]) * (b - b0);
+    x[i] = Math.max(-ceil, Math.min(ceil, x[i] * pre * gi));
+  }
+}
+
+/* =========================================================
+   JS 8. A/B 聴き比べ・再生
+   再生中に切り替えても、同じ位置から続けて聴ける
+   ========================================================= */
+const play = { node: null, startedAt: 0, offset: 0 };
+$('#ab').onclick = (e) => { const b = e.target.closest('[data-ab]'); if (b && !b.disabled) setAB(b.dataset.ab); };
+function setAB(v) {
+  const wasPlaying = !!play.node, pos = playPos();
+  state.ab = v; document.querySelectorAll('[data-ab]').forEach(b => b.setAttribute('aria-pressed', b.dataset.ab === v));
+  if (wasPlaying) startPlay(pos);
+}
+const currentBuffer = () => state.ab === 'after' && state.output ? state.output : state.source && state.source.buffer;
+const playPos = () => play.node ? play.offset + ctx().currentTime - play.startedAt : 0;
+
+// 停止中の位置も覚えておき、続きから再生できるようにする
+$('#btn-play').onclick = () => play.node ? stopPlay() : startPlay(state.viewPos || 0);
+function startPlay(offset) {
+  const buf = currentBuffer(); if (!buf) return;
+  stopPlay(true);
+  if (offset >= buf.duration - 0.05) offset = 0;
+  const ac = ctx();
+  const node = ac.createBufferSource(); node.buffer = buf; node.connect(ac.destination);
+  node.onended = () => { if (play.node === node) { stopPlay(); state.viewPos = 0; updatePlayhead(); } };
+  node.start(0, offset);
+  Object.assign(play, { node, startedAt: ac.currentTime, offset });
+  $('#btn-play').textContent = '■ 停止';
+  requestAnimationFrame(followPlayhead);
+}
+function stopPlay(keepLabel) {
+  if (play.node) { state.viewPos = playPos(); const n = play.node; play.node = null; try { n.stop(); } catch {} }
+  if (!keepLabel) $('#btn-play').textContent = '▶ 再生';
+}
+
+// 再生中は位置表示と音程グラフを追従させる
+function followPlayhead() {
+  if (!play.node) return;
+  state.viewPos = playPos(); updatePlayhead();
+  requestAnimationFrame(followPlayhead);
+}
+const duration = () => { const b = state.source && state.source.buffer; return b ? b.duration : 0; };
+function updatePlayhead() {
+  const d = duration();
+  $('#time-cur').textContent = fmt(state.viewPos || 0);
+  $('#time-dur').textContent = fmt(d);
+  if (!seeking) $('#seek').value = d ? Math.round((state.viewPos || 0) / d * 1000) : 0;
+  drawPitch();
+}
+function seekTo(sec) {
+  state.viewPos = Math.max(0, Math.min(duration(), sec));
+  if (play.node) startPlay(state.viewPos); else updatePlayhead();
+}
+let seeking = false;
+$('#seek').oninput = (e) => { seeking = true; seekTo(e.target.value / 1000 * duration()); };
+$('#seek').onchange = () => { seeking = false; };
+
+// 音程グラフのドラッグで前後に移動
+(() => {
+  const cv = $('#pitch-canvas'); let lastX = null;
+  cv.addEventListener('pointerdown', (e) => { lastX = e.clientX; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', (e) => {
+    if (lastX === null) return;
+    const dx = e.clientX - lastX; if (Math.abs(dx) < 2) return;
+    lastX = e.clientX;
+    seekTo((state.viewPos || 0) - dx / cv.clientWidth * VIEW.windowSec);
+  });
+  const end = () => { lastX = null; };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+})();
+
+/* =========================================================
+   JS 9. 音程の可視化（歌った音程 vs 補正後）
+   再生位置のまわり windowSec 秒を表示し、再生に合わせて流れる
+   ========================================================= */
+const VIEW = {
+  windowSec: 8,        // 画面に表示する長さ
+  headRatio: 0.3,      // 再生位置の線を左から何割の位置に置くか
+  minSemitones: 12,    // 縦軸の最小幅（半音）
+};
+function drawPitch() {
+  const cv = $('#pitch-canvas'); const dpr = devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight; if (!w) return;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
+  const css = getComputedStyle(document.documentElement), col = (v) => css.getPropertyValue(v).trim();
+  const pd = state.processed && state.pitch;
+  $('#pitch-key').textContent = pd ? 'キー：' + pd.key : '';
+  if (!pd) {
+    g.fillStyle = col('--color-text-sub'); g.font = '12px ' + col('--font-base'); g.textAlign = 'center';
+    g.fillText('おまかせ補正すると表示されます', w / 2, h / 2); return;
+  }
+  const { midi, shift, target, hopSec } = pd, nf = midi.length;
+  // 縦軸は曲全体の音域で固定（スクロール中に揺れないように）
+  let lo = 999, hi = -999;
+  for (const m of midi) if (!isNaN(m)) { lo = Math.min(lo, m); hi = Math.max(hi, m); }
+  if (lo > hi) return;
+  lo = Math.floor(lo) - 1; hi = Math.ceil(hi) + 1;
+  if (hi - lo < VIEW.minSemitones) { const c = (hi + lo) / 2; lo = Math.floor(c - VIEW.minSemitones / 2); hi = lo + VIEW.minSemitones; }
+  const y = (m) => h - (m - lo) / (hi - lo) * h;
+  const pos = state.viewPos || 0;
+  const t0 = pos - VIEW.windowSec * VIEW.headRatio;
+  const xOf = (sec) => (sec - t0) / VIEW.windowSec * w;
+  // 半音ごとの横線（ド＝C は濃く、音名を表示）
+  g.font = '10px ' + col('--font-base'); g.textAlign = 'left';
+  for (let m = lo; m <= hi; m++) {
+    const isC = ((m % 12) + 12) % 12 === 0;
+    if ((hi - lo) > 24 && !isC) continue;
+    g.strokeStyle = col('--color-line'); g.globalAlpha = isC ? 1 : .5; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, y(m)); g.lineTo(w, y(m)); g.stroke(); g.globalAlpha = 1;
+    if (isC) { g.fillStyle = col('--color-text-sub'); g.fillText('C' + (Math.floor(m / 12) - 1), 2, y(m) - 2); }
+  }
+  const f0 = Math.max(0, Math.floor(t0 / hopSec)), f1 = Math.min(nf - 1, Math.ceil((t0 + VIEW.windowSec) / hopSec));
+  // 目標の音（うすい帯）
+  g.fillStyle = col('--color-kin-soft');
+  for (let f = f0; f <= f1; f++) if (!isNaN(target[f])) g.fillRect(xOf(f * hopSec), y(target[f] + .5), w / (VIEW.windowSec / hopSec) + 1, y(0) - y(1));
+  const line = (val, color, lw) => {
+    g.strokeStyle = color; g.lineWidth = lw; g.lineJoin = 'round'; g.beginPath();
+    let pen = false;
+    for (let f = f0; f <= f1; f++) {
+      const v = val(f);
+      if (isNaN(v)) { pen = false; continue; }
+      const x = xOf(f * hopSec);
+      pen ? g.lineTo(x, y(v)) : g.moveTo(x, y(v)); pen = true;
+    }
+    g.stroke();
+  };
+  line((f) => midi[f], col('--color-text-sub'), 1.5);
+  line((f) => midi[f] + shift[f], col('--color-kin'), 2.5);
+  // 再生位置
+  g.strokeStyle = col('--color-ground'); g.lineWidth = 2;
+  g.beginPath(); g.moveTo(xOf(pos), 0); g.lineTo(xOf(pos), h); g.stroke();
+}
+addEventListener('resize', drawPitch);
+
+/* =========================================================
+   JS 10. 書き出し（ダミー）
+   ========================================================= */
+$('#btn-to-export').onclick = () => { stopPlay(); go('export'); };
+$('#btn-wav').onclick = () => download(encodeWAV(state.output), state.source.name + '_utanao.wav');
+
+// 16bit PCM WAV
+function encodeWAV(buf) {
+  const ch = buf.numberOfChannels, len = buf.length, rate = buf.sampleRate;
+  const view = new DataView(new ArrayBuffer(44 + len * ch * 2));
+  const str = (o, s) => [...s].forEach((c, i) => view.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF'); view.setUint32(4, 36 + len * ch * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, ch, true);
+  view.setUint32(24, rate, true); view.setUint32(28, rate * ch * 2, true); view.setUint16(32, ch * 2, true); view.setUint16(34, 16, true);
+  str(36, 'data'); view.setUint32(40, len * ch * 2, true);
+  const data = [...Array(ch)].map((_, c) => buf.getChannelData(c));
+  let o = 44;
+  for (let i = 0; i < len; i++) for (let c = 0; c < ch; c++) {
+    const s = Math.max(-1, Math.min(1, data[c][i]));
+    view.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); o += 2;
+  }
+  return new Blob([view], { type: 'audio/wav' });
+}
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+/* =========================================================
+   JS 10-1. MP3 書き出し
+   エンコーダー（lamejs, LGPL）は押したときだけ CDN から読み込む
+   ※ 読み込むのはプログラムだけで、音声は端末の外に出ない
+   ========================================================= */
+const MP3 = {
+  libUrl: 'https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js',
+  kbps: 192,
+};
+let lamePromise = null;
+function loadLame() {
+  if (window.lamejs) return Promise.resolve();
+  return lamePromise ||= new Promise((ok, ng) => {
+    const s = document.createElement('script');
+    s.src = MP3.libUrl; s.crossOrigin = 'anonymous';
+    s.onload = ok; s.onerror = () => { lamePromise = null; s.remove(); ng(new Error('load')); };
+    document.head.appendChild(s);
+  });
+}
+$('#btn-mp3').onclick = async () => {
+  const btn = $('#btn-mp3'), label = btn.textContent;
+  btn.disabled = true; btn.textContent = '準備中…';
+  try { await loadLame(); }
+  catch { alert('MP3の変換機能を読み込めませんでした。ネット接続を確認してください（WAVはオフラインでも書き出せます）。'); btn.disabled = false; btn.textContent = label; return; }
+  try {
+    const blob = await encodeMP3(state.output, (p) => btn.textContent = `変換中… ${p}%`);
+    download(blob, state.source.name + '_utanao.mp3');
+  } catch (err) { console.error(err); alert('MP3への変換中にエラーが起きました。'); }
+  btn.disabled = false; btn.textContent = label;
+};
+async function encodeMP3(buf, onProgress) {
+  const ch = Math.min(2, buf.numberOfChannels), n = buf.length;
+  const enc = new lamejs.Mp3Encoder(ch, buf.sampleRate, MP3.kbps);
+  const toI16 = (f) => { const o = new Int16Array(f.length); for (let i = 0; i < f.length; i++) { const s = Math.max(-1, Math.min(1, f[i])); o[i] = s < 0 ? s * 0x8000 : s * 0x7fff; } return o; };
+  const L = toI16(buf.getChannelData(0)), R = ch > 1 ? toI16(buf.getChannelData(1)) : null;
+  const parts = [], block = 1152;
+  let lastYield = performance.now();
+  for (let i = 0; i < n; i += block) {
+    const out = R ? enc.encodeBuffer(L.subarray(i, i + block), R.subarray(i, i + block)) : enc.encodeBuffer(L.subarray(i, i + block));
+    if (out.length) parts.push(new Uint8Array(out));
+    if (performance.now() - lastYield > 100) { onProgress(Math.round(i / n * 100)); await nextFrame(); lastYield = performance.now(); }
+  }
+  const end = enc.flush(); if (end.length) parts.push(new Uint8Array(end));
+  return new Blob(parts, { type: 'audio/mpeg' });
+}
+</script>
+</body>
+</html>
